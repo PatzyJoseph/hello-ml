@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image-Based Cancer Classification</title>
+    <!-- Tailwind CSS and DaisyUI CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.5/dist/full.css" rel="stylesheet" type="text/css" />
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
+    <!-- Header -->
+    <header>
+        <h1 class="text-3xl font-bold text-center text-blue-600">Skin Cancer Classifier</h1>
+    </header>
+
+    <!-- Main Content -->
+    <div class="w-full max-w-md p-6 bg-white rounded-lg shadow-md mt-8">
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-4">Upload an Image</h2>
+        <p class="text-center text-gray-600 mb-6">Upload an image to classify and get AI-generated details about the prediction.</p>
+        
+        <!-- Display error message if any -->
+        {% if error %}
+        <p class="text-center text-red-500 mb-4">{{ error }}</p>
+        {% endif %}
+
+        <!-- Upload Form -->
+        <form action="/predict" method="post" enctype="multipart/form-data" class="space-y-4">
+            <div>
+                <input 
+                    type="file" 
+                    name="file" 
+                    accept="image/*" 
+                    required 
+                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                >
+            </div>
+            <button 
+                type="submit" 
+                class="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+                Upload and Predict
+            </button>
+        </form>
+    </div>
+
+    <!-- Display Results -->
+    {% if label_name %}
+    <div class="w-full max-w-md p-6 bg-white rounded-lg shadow-md mt-8">
+        <h3 class="text-xl font-bold text-gray-800 mb-2">Prediction Results</h3>
+        <p><strong>Label Name:</strong> {{ label_name }}</p>
+        <p><strong>Disease Name:</strong> {{ disease_name }}</p>
+        <p><strong>Confidence:</strong> {{ confidence | round(2) }}</p>
+        <p><strong>AI-Generated Details:</strong></p>
+        <p class="text-gray-700">{{ ai_details }}</p>
+    </div>
+    {% endif %}
+</body>
+</html>
