@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Skin Cancer Detection</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #00000080;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(20px);
+      border-radius: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+    }
+
+    .upload-area {
+      border: 2px dashed #171717;
+      border-radius: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .upload-area:hover {
+      background-color: rgba(23, 23, 23, 0.05);
+      border-color: #171717;
+    }
+
+    .example-image:hover {
+      transform: scale(1.05);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .selected-image-container {
+      border: 1px solid #d1d5db;
+      border-radius: 1rem;
+      background: rgba(23, 23, 23, 0.03);
+    }
+
+    .fade-in {
+      animation: fadeIn 0.6s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .error-message {
+      animation: shake 0.3s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      50% { transform: translateX(4px); }
+      75% { transform: translateX(-4px); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6 text-gray-800">
+  <div class="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-8">
+    <!-- Left Section -->
+    <div class="glass p-8">
+      <h1 class="text-3xl font-bold text-center mb-6">
+        Automatic <span style="color: #171717">Skin Cancer Detection</span>
+      </h1>
+      
+      <div id="uploadArea" class="upload-area p-6 text-center cursor-pointer">
+        <p class="text-gray-600">Click or drag a skin image here to upload</p>
+      </div>
+
+      <div id="selectedImageContainer" class="selected-image-container p-4 mt-4 hidden">
+        <p class="text-sm text-gray-600 mb-2 font-semibold">Selected Image</p>
+        <img id="selectedImage" src="" class="w-full max-h-52 object-contain rounded-md mx-auto">
+      </div>
+
+      <form id="uploadForm" class="mt-6" method="POST" enctype="multipart/form-data" action="/predict">
+        <input type="file" id="fileInput" name="file" accept="image/png, image/jpeg" class="hidden">
+        <button type="submit" class="w-full py-3 text-white rounded-lg transition" style="background-color: #171717;">Analyze Image</button>
+      </form>
+
+      <div class="mt-8 text-center">
+        <p class="text-sm text-gray-500 mb-3">Or try these sample images:</p>
+        <div class="flex justify-center gap-3">
+          {% for i in range(1, 5) %}
+            <button type="button"
+                    data-src="{{ url_for('static', filename='images/example' ~ i ~ '.jpg') }}"
+                    data-example="example{{ i }}.jpg"
+                    class="example-image transition transform hover:scale-105">
+              <img src="{{ url_for('static', filename='images/example' ~ i ~ '.jpg') }}" class="w-20 h-20 object-cover rounded-lg shadow-sm">
+            </button>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Section -->
+    <div class="glass p-8 flex flex-col justify-center relative">
+      <div id="loadingSpinner" class="hidden flex justify-center items-center h-full">
+        <div class="animate-spin h-10 w-10 border-4" style="border-color: #171717 transparent #171717 #171717; border-radius: 9999px;"></div>
+      </div>
+
+      <div id="resultsCard" class="hidden fade-in">
+        <h2 class="text-2xl font-bold mb-4">🧾 Results</h2>
+        <p><strong>Label:</strong> <span id="resultLabel"></span></p>
+        <p><strong>Name:</strong> <span id="resultName"></span></p>
+        <p><strong>Confidence:</strong> <span id="resultConfidence"></span></p>
+        <div class="mt-4">
+          <p class="font-semibold">Description & Treatment:</p>
+          <p id="resultDescriptionAndTreatment" class="text-sm text-gray-600 mt-1"></p>
+        </div>
+      </div>
+
+      <div id="errorMessage" class="text-red-600 font-semibold mt-4 hidden error-message"></div>
+    </div>
+  </div>
+
+  <script>
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const selectedImage = document.getElementById('selectedImage');
+    const selectedImageContainer = document.getElementById('selectedImageContainer');
+    const resultsCard = document.getElementById('resultsCard');
+    const errorMessage = document.getElementById('errorMessage');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const resultLabel = document.getElementById('resultLabel');
+    const resultName = document.getElementById('resultName');
+    const resultConfidence = document.getElementById('resultConfidence');
+    const resultDescriptionAndTreatment = document.getElementById('resultDescriptionAndTreatment');
+    const exampleImages = document.querySelectorAll('.example-image');
+
+    let selectedFile = null;
+    let selectedExample = null;
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('bg-gray-100');
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('bg-gray-100');
+    });
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileInput.files = e.dataTransfer.files;
+      handleFileUpload(fileInput.files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleFileUpload(e.target.files[0]);
+      }
+    });
+
+    function handleFileUpload(file) {
+      selectedFile = file;
+      selectedExample = null;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        selectedImage.src = e.target.result;
+        selectedImageContainer.classList.remove('hidden');
+        resultsCard.classList.add('hidden');
+        errorMessage.classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    exampleImages.forEach((image) => {
+      image.addEventListener('click', () => {
+        const imgSrc = image.getAttribute('data-src');
+        const exampleName = image.getAttribute('data-example');
+        selectedImage.src = imgSrc;
+        selectedImageContainer.classList.remove('hidden');
+        selectedExample = exampleName;
+        selectedFile = null;
+        resultsCard.classList.add('hidden');
+        errorMessage.classList.add('hidden');
+      });
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!selectedFile && !selectedExample) {
+        errorMessage.textContent = 'Please select an image first.';
+        errorMessage.classList.remove('hidden');
+        return;
+      }
+
+      const formData = new FormData();
+      if (selectedFile) {
+        formData.append('file', selectedFile);
+      } else if (selectedExample) {
+        formData.append('example', selectedExample);
+      }
+
+      try {
+        loadingSpinner.classList.remove('hidden');
+        errorMessage.classList.add('hidden');
+
+        const response = await fetch('/predict', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) throw new Error(result.error || 'Prediction failed');
+
+        resultLabel.textContent = result.label;
+        resultName.textContent = result.name;
+        resultConfidence.textContent = (result.confidence * 100).toFixed(2) + '%';
+        resultDescriptionAndTreatment.textContent = result.description_and_treatment;
+
+        resultsCard.classList.remove('hidden');
+      } catch (error) {
+        errorMessage.textContent = error.message || 'An error occurred during prediction.';
+        errorMessage.classList.remove('hidden');
+      } finally {
+        loadingSpinner.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
